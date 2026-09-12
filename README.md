@@ -1,7 +1,7 @@
 # 🎵 Sonora - Player de Música Moderno para Android
 
 <p align="center">
-  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="Sonora Logo" width="120" height="120" style="border-radius: 24px;" />
+  <img src="app/src/main/res/drawable/ic_sonora_logo.jpg" alt="Sonora Logo" width="120" height="120" style="border-radius: 24px;" />
 </p>
 
 <p align="center">
