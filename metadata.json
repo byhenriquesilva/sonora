@@ -1,0 +1,6 @@
+{
+  "name": "Sonora",
+  "description": "Player de música local e offline com interface moderna, elegante e completa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
