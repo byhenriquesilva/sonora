@@ -84,6 +84,33 @@ class MusicPlaybackService : Service(), MediaPlayer.OnCompletionListener, MediaP
     private var isPlayingState: Boolean = false
     private var wasPlayingBeforeFocusLoss: Boolean = false
     private var isNoisyReceiverRegistered: Boolean = false
+    private var hasAudioFocus: Boolean = false
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                hasAudioFocus = false
+                wasPlayingBeforeFocusLoss = false
+                PlaybackManager.pause()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                hasAudioFocus = false
+                wasPlayingBeforeFocusLoss = isPlayingState
+                PlaybackManager.pause()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                mediaPlayer?.setVolume(0.2f, 0.2f)
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                hasAudioFocus = true
+                mediaPlayer?.setVolume(1.0f, 1.0f)
+                if (wasPlayingBeforeFocusLoss) {
+                    wasPlayingBeforeFocusLoss = false
+                    PlaybackManager.resume()
+                }
+            }
+        }
+    }
 
     private var cachedArtwork: Bitmap? = null
     private var cachedArtworkKey: String? = null
@@ -224,7 +251,9 @@ class MusicPlaybackService : Service(), MediaPlayer.OnCompletionListener, MediaP
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        MediaButtonReceiver.handleIntent(mediaSession, intent)
+        if (intent?.action == Intent.ACTION_MEDIA_BUTTON) {
+            MediaButtonReceiver.handleIntent(mediaSession, intent)
+        }
 
         val action = intent?.action ?: return START_NOT_STICKY
 
@@ -392,19 +421,33 @@ class MusicPlaybackService : Service(), MediaPlayer.OnCompletionListener, MediaP
     }
 
     private fun stopPlayback() {
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         mediaPlayer = null
         isPlayingState = false
+        abandonAudioFocus()
         PlaybackManager.updatePlaybackState(false)
         updatePlaybackState(false, 0)
-        com.example.widget.SonoraAppWidgetProvider.updateAllWidgets(applicationContext, false, null, null)
+        try {
+            com.example.widget.SonoraAppWidgetProvider.updateAllWidgets(applicationContext, false, null, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            notificationManager?.cancel(NOTIFICATION_ID)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         stopSelf()
     }
@@ -423,71 +466,46 @@ class MusicPlaybackService : Service(), MediaPlayer.OnCompletionListener, MediaP
     }
 
     private fun requestAudioFocus(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val playbackAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build()
+        if (hasAudioFocus) return true
+        val res = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (audioFocusRequest == null) {
+                val playbackAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
 
-            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(playbackAttributes)
-                .setAcceptsDelayedFocusGain(true)
-                .setOnAudioFocusChangeListener { focusChange ->
-                    when (focusChange) {
-                        AudioManager.AUDIOFOCUS_LOSS -> {
-                            wasPlayingBeforeFocusLoss = false
-                            PlaybackManager.pause()
-                        }
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                            wasPlayingBeforeFocusLoss = isPlayingState
-                            PlaybackManager.pause()
-                        }
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                            mediaPlayer?.setVolume(0.2f, 0.2f)
-                        }
-                        AudioManager.AUDIOFOCUS_GAIN -> {
-                            mediaPlayer?.setVolume(1.0f, 1.0f)
-                            if (wasPlayingBeforeFocusLoss) {
-                                wasPlayingBeforeFocusLoss = false
-                                PlaybackManager.resume()
-                            }
-                        }
-                    }
-                }
-                .build()
-
-            val res = audioManager?.requestAudioFocus(audioFocusRequest!!)
-            return res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+                audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(playbackAttributes)
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                    .build()
+            }
+            audioManager?.requestAudioFocus(audioFocusRequest!!)
         } else {
             @Suppress("DEPRECATION")
-            val res = audioManager?.requestAudioFocus(
-                { focusChange ->
-                    when (focusChange) {
-                        AudioManager.AUDIOFOCUS_LOSS -> {
-                            wasPlayingBeforeFocusLoss = false
-                            PlaybackManager.pause()
-                        }
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                            wasPlayingBeforeFocusLoss = isPlayingState
-                            PlaybackManager.pause()
-                        }
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                            mediaPlayer?.setVolume(0.2f, 0.2f)
-                        }
-                        AudioManager.AUDIOFOCUS_GAIN -> {
-                            mediaPlayer?.setVolume(1.0f, 1.0f)
-                            if (wasPlayingBeforeFocusLoss) {
-                                wasPlayingBeforeFocusLoss = false
-                                PlaybackManager.resume()
-                            }
-                        }
-                    }
-                },
+            audioManager?.requestAudioFocus(
+                audioFocusChangeListener,
                 AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN
             )
-            return res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         }
+        hasAudioFocus = (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        return hasAudioFocus
+    }
+
+    private fun abandonAudioFocus() {
+        if (!hasAudioFocus) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.abandonAudioFocus(audioFocusChangeListener)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        hasAudioFocus = false
     }
 
     private fun createNotificationChannel() {
@@ -751,6 +769,7 @@ class MusicPlaybackService : Service(), MediaPlayer.OnCompletionListener, MediaP
 
     override fun onDestroy() {
         super.onDestroy()
+        abandonAudioFocus()
         unregisterNoisyReceiver()
         mediaPlayer?.release()
         mediaPlayer = null

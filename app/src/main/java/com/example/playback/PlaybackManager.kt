@@ -259,11 +259,61 @@ object PlaybackManager {
     }
 
     fun clearQueue() {
+        val wasPlaying = _isPlaying.value
+        val hadSong = _currentSong.value != null
         _queue.value = emptyList()
         _currentSong.value = null
         _isPlaying.value = false
         stopProgressLoop()
-        sendCommand(MusicPlaybackService.ACTION_STOP)
+        if (wasPlaying || hadSong) {
+            sendCommand(MusicPlaybackService.ACTION_STOP)
+        }
+    }
+
+    fun removeSongEverywhere(songId: Long) {
+        val currentQ = _queue.value.toMutableList()
+        val index = currentQ.indexOfFirst { it.id == songId }
+        if (index >= 0) {
+            if (currentQ.size <= 1) {
+                clearQueue()
+            } else {
+                removeFromQueue(index)
+            }
+        }
+    }
+
+    fun removeSongsInExcludedFolder(folderPath: String, folderName: String) {
+        val currentQ = _queue.value
+        if (currentQ.isEmpty()) return
+
+        val pathLower = folderPath.trim().lowercase()
+        val nameLower = folderName.trim().lowercase()
+        val isMatch: (Song) -> Boolean = { s ->
+            s.folder.trim().lowercase() == nameLower ||
+            (pathLower.isNotBlank() && (s.dataPath.lowercase().startsWith(pathLower) || s.dataPath.lowercase().contains(pathLower)))
+        }
+
+        if (currentQ.none(isMatch)) return
+
+        val current = _currentSong.value
+        if (current != null && isMatch(current)) {
+            val nextNonExcluded = currentQ.indices.firstOrNull { it != _queueIndex.value && !isMatch(currentQ[it]) }
+            if (nextNonExcluded != null) {
+                playTrackAtIndex(nextNonExcluded, _isPlaying.value)
+            } else {
+                clearQueue()
+                return
+            }
+        }
+
+        val filtered = currentQ.filterNot(isMatch)
+        if (filtered.isEmpty()) {
+            clearQueue()
+        } else {
+            _queue.value = filtered
+            val newIndex = filtered.indexOfFirst { it.id == _currentSong.value?.id }
+            _queueIndex.value = newIndex.coerceAtLeast(0)
+        }
     }
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
@@ -439,7 +489,9 @@ object PlaybackManager {
                 }
                 putExtra(MusicPlaybackService.EXTRA_SEEK_MS, seekMs)
             }
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val isStartForegroundAction = action == MusicPlaybackService.ACTION_PLAY_SONG ||
+                    action == MusicPlaybackService.ACTION_RESUME
+            if (isStartForegroundAction && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 ctx.startForegroundService(intent)
             } else {
                 ctx.startService(intent)

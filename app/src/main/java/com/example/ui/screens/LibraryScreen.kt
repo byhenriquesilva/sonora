@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -86,6 +89,9 @@ fun LibraryScreen(
     onFolderClick: (Folder) -> Unit,
     onRefreshScan: () -> Unit,
     onSearchClick: () -> Unit,
+    excludedFoldersCount: Int = 0,
+    onExcludeFolder: (Folder) -> Unit = {},
+    onManageExcludedFolders: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showSortMenu by remember { mutableStateOf(false) }
@@ -287,13 +293,54 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomPadding),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (excludedFoldersCount > 0) {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onManageExcludedFolders() }
+                                    .testTag("banner_manage_excluded_folders")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FolderOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "$excludedFoldersCount pasta(s) ocultada(s)",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "Gerenciar",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     items(folders) { folder ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { onFolderClick(folder) }
-                                .padding(vertical = 12.dp, horizontal = 12.dp)
+                                .padding(vertical = 8.dp, horizontal = 12.dp)
                                 .testTag("folder_item_${folder.name}"),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -317,6 +364,17 @@ fun LibraryScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(
+                                onClick = { onExcludeFolder(folder) },
+                                modifier = Modifier.testTag("btn_exclude_folder_${folder.name}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderOff,
+                                    contentDescription = "Ocultar pasta da biblioteca",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }

@@ -1,10 +1,14 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +22,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Favorite
@@ -400,9 +407,10 @@ fun FullPlayerScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Progress Slider
-            Slider(
+            // Progress Slider with Neon Glow & Small Circular Dot Thumb (Precisely centered on the line)
+            NeonMusicSlider(
                 value = sliderValue,
+                valueRange = 0f..maxSliderValue,
                 onValueChange = {
                     isUserSeeking = true
                     seekPosition = it
@@ -411,12 +419,7 @@ fun FullPlayerScreen(
                     onSeekTo(seekPosition.toLong())
                     isUserSeeking = false
                 },
-                valueRange = 0f..maxSliderValue,
-                colors = SliderDefaults.colors(
-                    thumbColor = animatedAccent,
-                    activeTrackColor = animatedAccent,
-                    inactiveTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                ),
+                accentColor = animatedAccent,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("player_progress_slider")
@@ -424,13 +427,16 @@ fun FullPlayerScreen(
 
             // Timers
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = currentFormatted,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.SemiBold,
+                    color = animatedAccent
                 )
                 Text(
                     text = song.formattedDuration,
@@ -565,6 +571,106 @@ fun FullPlayerScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun NeonMusicSlider(
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    accentColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    var isDragging by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableFloatStateOf(0f) }
+
+    val range = valueRange.endInclusive - valueRange.start
+    val currentProgress = if (range > 0f) {
+        ((value - valueRange.start) / range).coerceIn(0f, 1f)
+    } else 0f
+
+    val displayProgress = if (isDragging) dragProgress else currentProgress
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .pointerInput(range, valueRange.start) {
+                detectTapGestures(
+                    onPress = { offset ->
+                        val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                        dragProgress = newProgress
+                        isDragging = true
+                        val newValue = valueRange.start + newProgress * range
+                        onValueChange(newValue)
+                        tryAwaitRelease()
+                        isDragging = false
+                        onValueChangeFinished()
+                    }
+                )
+            }
+            .pointerInput(range, valueRange.start) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        isDragging = true
+                        val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                        dragProgress = newProgress
+                        val newValue = valueRange.start + newProgress * range
+                        onValueChange(newValue)
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        onValueChangeFinished()
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        val newProgress = (change.position.x / size.width).coerceIn(0f, 1f)
+                        dragProgress = newProgress
+                        val newValue = valueRange.start + newProgress * range
+                        onValueChange(newValue)
+                    }
+                )
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val trackHeight = 4.dp.toPx()
+            val thumbRadius = 6.dp.toPx() // 12.dp de diâmetro total
+            val centerY = size.height / 2f
+
+            val availableWidth = size.width
+            val thumbX = (availableWidth * displayProgress).coerceIn(0f, availableWidth)
+
+            // Trilha inativa de fundo (contínua)
+            drawRoundRect(
+                color = accentColor.copy(alpha = 0.25f),
+                topLeft = Offset(0f, centerY - trackHeight / 2f),
+                size = Size(availableWidth, trackHeight),
+                cornerRadius = CornerRadius(trackHeight / 2f, trackHeight / 2f)
+            )
+
+            // Trilha ativa neon até a posição da bolinha
+            if (thumbX > 0f) {
+                drawRoundRect(
+                    color = accentColor,
+                    topLeft = Offset(0f, centerY - trackHeight / 2f),
+                    size = Size(thumbX, trackHeight),
+                    cornerRadius = CornerRadius(trackHeight / 2f, trackHeight / 2f)
+                )
+            }
+
+            // Bolinha colorida perfeitamente alinhada no centro exato da linha
+            drawCircle(
+                color = accentColor,
+                radius = if (isDragging) 7.dp.toPx() else thumbRadius,
+                center = Offset(thumbX, centerY)
+            )
         }
     }
 }

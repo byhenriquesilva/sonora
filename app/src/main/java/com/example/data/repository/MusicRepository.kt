@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import com.example.data.local.AppDatabase
+import com.example.data.local.ExcludedFolderEntity
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.HistoryEntity
 import com.example.data.local.PlaylistEntity
@@ -42,12 +43,28 @@ class MusicRepository(private val context: Context) {
     val mostPlayedHistory: Flow<List<HistoryEntity>> = musicDao.getMostPlayedHistory()
     val totalPlayCount: Flow<Int?> = musicDao.getTotalPlayCount()
     val totalDurationPlayed: Flow<Long?> = musicDao.getTotalDurationPlayed()
+    val excludedFolders: Flow<List<ExcludedFolderEntity>> = musicDao.getAllExcludedFolders()
 
-    // Combined songs with favorite flag and play count
-    val songsWithFavorites: Flow<List<Song>> = combine(_deviceSongs, favoriteSongIds, allHistory) { songs, favIds, histList ->
+    // Combined songs with favorite flag and play count, excluding blacklisted folders
+    val songsWithFavorites: Flow<List<Song>> = combine(
+        _deviceSongs,
+        favoriteSongIds,
+        allHistory,
+        excludedFolders
+    ) { songs, favIds, histList, excludedList ->
         val favSet = favIds.toSet()
         val histMap = histList.associateBy { it.songId }
-        songs.map { song ->
+        val excludedPaths = excludedList.map { it.path.trim().lowercase() }.filter { it.isNotBlank() }
+        val excludedNames = excludedList.map { it.name.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
+
+        songs.filter { song ->
+            val songFolderLower = song.folder.trim().lowercase()
+            val songPathLower = song.dataPath.trim().lowercase()
+            val isExcluded = excludedNames.contains(songFolderLower) || excludedPaths.any { exclPath ->
+                songPathLower.startsWith(exclPath) || songPathLower.contains(exclPath)
+            }
+            !isExcluded
+        }.map { song ->
             val hist = histMap[song.id]
             song.copy(
                 isFavorite = favSet.contains(song.id),
@@ -290,6 +307,28 @@ class MusicRepository(private val context: Context) {
 
     suspend fun setSetting(key: String, value: String) = withContext(Dispatchers.IO) {
         musicDao.setSetting(com.example.data.local.AppSettingEntity(key = key, value = value))
+    }
+
+    // --- Excluded Folders Management ---
+    suspend fun excludeFolder(path: String, name: String) = withContext(Dispatchers.IO) {
+        musicDao.insertExcludedFolder(ExcludedFolderEntity(path = path, name = name))
+    }
+
+    suspend fun restoreExcludedFolder(path: String) = withContext(Dispatchers.IO) {
+        musicDao.deleteExcludedFolder(path)
+    }
+
+    suspend fun clearAllExcludedFolders() = withContext(Dispatchers.IO) {
+        musicDao.clearAllExcludedFolders()
+    }
+
+    // --- Song Physical Deletion Cleanup ---
+    suspend fun deleteSongLocalReferences(songId: Long) = withContext(Dispatchers.IO) {
+        musicDao.removeFavorite(songId)
+        musicDao.deletePlaylistSongReferences(songId)
+        musicDao.deleteHistoryForSong(songId)
+        val updated = _deviceSongs.value.filter { it.id != songId }
+        _deviceSongs.value = updated
     }
 
     // --- Genre Extraction ---

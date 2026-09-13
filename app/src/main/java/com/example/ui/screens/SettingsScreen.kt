@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
@@ -85,6 +86,8 @@ fun SettingsScreen(
     onRefreshScan: () -> Unit,
     onAddDemoTracks: () -> Unit,
     onClearHistory: () -> Unit,
+    excludedFoldersCount: Int = 0,
+    onManageExcludedFolders: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accentColors = listOf(
@@ -408,6 +411,19 @@ fun SettingsScreen(
                         subtitle = "Adiciona músicas offline sintetizadas para teste",
                         tag = "setting_add_demo",
                         onClick = onAddDemoTracks
+                    )
+
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+
+                    SettingsActionRow(
+                        icon = Icons.Default.FolderOff,
+                        title = "Pastas Ocultadas da Biblioteca",
+                        subtitle = if (excludedFoldersCount > 0) "$excludedFoldersCount pasta(s) ocultada(s) • Toque para gerenciar" else "Nenhuma pasta ocultada • Filtrar áudios do WhatsApp/outros",
+                        tag = "setting_manage_excluded_folders",
+                        onClick = onManageExcludedFolders
                     )
 
                     HorizontalDivider(

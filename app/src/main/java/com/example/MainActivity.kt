@@ -72,12 +72,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import android.app.Activity
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.model.Song
 import com.example.ui.components.AddToPlaylistDialog
+import com.example.ui.components.ConfirmDeleteSongDialog
+import com.example.ui.components.ConfirmExcludeFolderDialog
 import com.example.ui.components.FloatingAcrylicNavBar
 import com.example.ui.components.LocalBottomContentPadding
+import com.example.ui.components.ManageExcludedFoldersDialog
 import com.example.ui.components.MiniPlayer
 import com.example.ui.components.SleepTimerDialog
 import com.example.ui.components.SongContextMenuBottomSheet
@@ -205,6 +209,24 @@ fun SonoraApp(viewModel: MusicViewModel) {
   val songForDetails by viewModel.songForDetails.collectAsState()
   val songForAddToPlaylist by viewModel.songForAddToPlaylist.collectAsState()
 
+  // Folder exclusion & Song deletion state
+  val excludedFolders by viewModel.excludedFolders.collectAsState()
+  val folderToExclude by viewModel.folderToExclude.collectAsState()
+  val showManageExcludedFoldersDialog by viewModel.showManageExcludedFoldersDialog.collectAsState()
+  val songToDelete by viewModel.songToDelete.collectAsState()
+
+  val deleteSongLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.StartIntentSenderForResult()
+  ) { result ->
+    viewModel.onSongDeleteResultReceived(result.resultCode == Activity.RESULT_OK)
+  }
+
+  LaunchedEffect(Unit) {
+    viewModel.deleteIntentSenderRequest.collect { request ->
+      deleteSongLauncher.launch(request)
+    }
+  }
+
   // Permissions & Onboarding check
   var hasStoragePermission by remember {
     val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -236,7 +258,8 @@ fun SonoraApp(viewModel: MusicViewModel) {
     enabled = showFullPlayer || showQueueSheet || showSleepTimerDialog || showStats ||
             activeArtist != null || activeAlbum != null || activeFolder != null ||
             activePlaylist != null || activeGenreDetail != null || activeHistoryDetail ||
-            activeMostPlayedDetail || activeNeverPlayedDetail || isSearchOpen
+            activeMostPlayedDetail || activeNeverPlayedDetail || isSearchOpen ||
+            folderToExclude != null || showManageExcludedFoldersDialog || songToDelete != null
   ) {
     viewModel.closeDetailViews()
   }
@@ -492,7 +515,8 @@ fun SonoraApp(viewModel: MusicViewModel) {
                     viewModel.shuffleSongList(fSongs)
                   },
                   onFavoriteClick = { viewModel.toggleFavorite(it) },
-                  onMoreClick = { viewModel.songForContextMenu.value = it }
+                  onMoreClick = { viewModel.songForContextMenu.value = it },
+                  onExcludeFolder = { viewModel.promptExcludeFolder(activeFolder!!.name, activeFolder!!.path) }
                 )
               }
 
@@ -527,7 +551,6 @@ fun SonoraApp(viewModel: MusicViewModel) {
                       onAlbumClick = { viewModel.openAlbum(it) },
                       onPlaylistClick = { viewModel.openPlaylist(it) },
                       onSearchClick = { viewModel.isSearchOpen.value = true },
-                      onSettingsClick = { viewModel.selectedTab.value = NavigationTab.SETTINGS },
                       onScanClick = { viewModel.refreshLibrary() },
                       onAddDemoClick = { viewModel.addDemoTracks() }
                     )
@@ -561,7 +584,10 @@ fun SonoraApp(viewModel: MusicViewModel) {
                       onArtistClick = { viewModel.openArtist(it) },
                       onFolderClick = { viewModel.openFolder(it) },
                       onRefreshScan = { viewModel.refreshLibrary() },
-                      onSearchClick = { viewModel.isSearchOpen.value = true }
+                      onSearchClick = { viewModel.isSearchOpen.value = true },
+                      excludedFoldersCount = excludedFolders.size,
+                      onExcludeFolder = { folder -> viewModel.promptExcludeFolder(folder.name, folder.path) },
+                      onManageExcludedFolders = { viewModel.showManageExcludedFoldersDialog.value = true }
                     )
                   }
 
@@ -610,7 +636,9 @@ fun SonoraApp(viewModel: MusicViewModel) {
                       onOpenStats = { viewModel.showStats.value = true },
                       onRefreshScan = { viewModel.refreshLibrary() },
                       onAddDemoTracks = { viewModel.addDemoTracks() },
-                      onClearHistory = { viewModel.clearHistory() }
+                      onClearHistory = { viewModel.clearHistory() },
+                      excludedFoldersCount = excludedFolders.size,
+                      onManageExcludedFolders = { viewModel.showManageExcludedFoldersDialog.value = true }
                     )
                   }
                 }
@@ -746,7 +774,19 @@ fun SonoraApp(viewModel: MusicViewModel) {
             val album = albums.find { it.title == songForContextMenu!!.album }
             if (album != null) viewModel.openAlbum(album)
           },
-          onShowDetails = { viewModel.songForDetails.value = songForContextMenu }
+          onShowDetails = { viewModel.songForDetails.value = songForContextMenu },
+          onExcludeFolder = {
+            val s = songForContextMenu!!
+            val fPath = try {
+              java.io.File(s.dataPath).parent ?: s.folder
+            } catch (e: Exception) {
+              s.folder
+            }
+            viewModel.promptExcludeFolder(s.folder, fPath)
+          },
+          onDeleteSong = {
+            viewModel.promptDeleteSong(songForContextMenu!!)
+          }
         )
       }
 
@@ -780,6 +820,35 @@ fun SonoraApp(viewModel: MusicViewModel) {
           onConfirm = { name ->
             viewModel.createPlaylist(name)
           }
+        )
+      }
+
+      // Confirm Exclude Folder Dialog
+      if (folderToExclude != null) {
+        ConfirmExcludeFolderDialog(
+          folderName = folderToExclude!!.first,
+          folderPath = folderToExclude!!.second,
+          onConfirm = { viewModel.confirmExcludeFolder() },
+          onDismiss = { viewModel.folderToExclude.value = null }
+        )
+      }
+
+      // Manage Excluded Folders Dialog
+      if (showManageExcludedFoldersDialog) {
+        ManageExcludedFoldersDialog(
+          excludedFolders = excludedFolders,
+          onRestoreFolder = { path -> viewModel.restoreExcludedFolder(path) },
+          onClearAll = { viewModel.clearAllExcludedFolders() },
+          onDismiss = { viewModel.showManageExcludedFoldersDialog.value = false }
+        )
+      }
+
+      // Confirm Real Delete Song from Device Dialog
+      if (songToDelete != null) {
+        ConfirmDeleteSongDialog(
+          song = songToDelete!!,
+          onConfirm = { viewModel.confirmDeleteSong() },
+          onDismiss = { viewModel.songToDelete.value = null }
         )
       }
     }

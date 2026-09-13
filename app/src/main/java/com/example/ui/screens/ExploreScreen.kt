@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -92,7 +91,7 @@ fun ExploreScreen(
     onViewAllHistory: () -> Unit,
     onSearchClick: () -> Unit,
     onStatsClick: () -> Unit,
-    onSettingsClick: () -> Unit,
+    onSettingsClick: () -> Unit = {},
     onScanClick: () -> Unit,
     onAddDemoClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -187,16 +186,6 @@ fun ExploreScreen(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Escanear dispositivo",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(
-                        onClick = onSettingsClick,
-                        modifier = Modifier.testTag("btn_settings")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Configurações",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }

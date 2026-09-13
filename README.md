@@ -53,6 +53,14 @@
   - **Artistas**: Grade de artistas com foto circular e agrupamento de obras.
   - **Pastas**: Navegação fiel à estrutura de diretórios do armazenamento do dispositivo.
   - **Favoritos**: Acesso imediato a todas as músicas marcadas como favoritas.
+- **Ocultação de Pastas da Biblioteca**:
+  - Exclusão de pastas da biblioteca musical (como áudios do WhatsApp, gravações de voz, notificações ou toques) sem apagar os arquivos do aparelho.
+  - Diálogo de confirmação dedicado e painel de gerenciamento para restaurar pastas ocultadas a qualquer momento.
+  - Disponível na aba **Pastas**, na tela de **Detalhes da Pasta**, no menu contextual **"..."** de qualquer música e nas **Configurações**.
+- **Exclusão Real de Arquivos do Dispositivo**:
+  - Opção no menu contextual **"..."** de qualquer música para apagar o arquivo permanentemente do armazenamento do celular.
+  - Integração nativa com `MediaStore` e `IntentSender` (Scoped Storage no Android 10, 11, 12, 13, 14+), garantindo confirmação explícita de segurança do sistema operacional antes da exclusão.
+  - Limpeza automática de referências em playlists, histórico e fila ativa.
 - **Playlists Customizadas**:
   - Criação de playlists ilimitadas com nomes personalizados.
   - Adição e remoção rápida de faixas via menu contextual.
@@ -151,6 +159,7 @@ app/src/main/java/com/example/
 ## 🔒 Permissões Utilizadas
 
 - `READ_MEDIA_AUDIO` (Android 13+ / API 33+) e `READ_EXTERNAL_STORAGE` (Android 12 e anteriores): Necessárias para indexar e reproduzir as faixas de áudio armazenadas localmente no seu aparelho.
+- `WRITE_EXTERNAL_STORAGE` (Android 9 e anteriores): Utilizada para permitir a exclusão direta de arquivos de áudio solicitada pelo usuário em aparelhos legado.
 - `POST_NOTIFICATIONS` (Android 13+): Necessária para exibir os controles de reprodução na barra de notificações e na tela de bloqueio.
 - `FOREGROUND_SERVICE` e `FOREGROUND_SERVICE_MEDIA_PLAYBACK`: Permite a reprodução contínua em segundo plano enquanto a tela está bloqueada ou outro app está em uso.
 
@@ -160,4 +169,3 @@ app/src/main/java/com/example/
 
 Este projeto é disponibilizado sob a licença [MIT](LICENSE).
 Sinta-se à vontade para utilizar, modificar e contribuir!
-

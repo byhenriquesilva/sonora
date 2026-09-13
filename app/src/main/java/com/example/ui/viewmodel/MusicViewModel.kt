@@ -1,9 +1,15 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.app.RecoverableSecurityException
+import android.content.ContentUris
+import android.os.Build
+import android.provider.MediaStore
+import androidx.activity.result.IntentSenderRequest
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.ExcludedFolderEntity
 import com.example.data.local.PlaylistEntity
 import com.example.data.model.Album
 import com.example.data.model.Artist
@@ -13,13 +19,16 @@ import com.example.data.model.SortOrder
 import com.example.data.repository.MusicRepository
 import com.example.playback.PlaybackManager
 import com.example.ui.theme.SonoraAccentEmerald
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 enum class NavigationTab(val label: String) {
     HOME("Explorar"),
@@ -84,6 +93,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val songForDetails = MutableStateFlow<Song?>(null)
     val songForAddToPlaylist = MutableStateFlow<Song?>(null)
     val showCreatePlaylistDialog = MutableStateFlow(false)
+
+    // Excluded Folders & Deletion State
+    val excludedFolders: StateFlow<List<ExcludedFolderEntity>> = repository.excludedFolders.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val folderToExclude = MutableStateFlow<Pair<String, String>?>(null) // (name, path)
+    val showManageExcludedFoldersDialog = MutableStateFlow(false)
+    val songToDelete = MutableStateFlow<Song?>(null)
+
+    private val _deleteIntentSenderRequest = MutableSharedFlow<IntentSenderRequest>()
+    val deleteIntentSenderRequest = _deleteIntentSenderRequest.asSharedFlow()
+    private var pendingSongToDelete: Song? = null
 
     // Onboarding
     val showOnboarding = MutableStateFlow(false)
@@ -278,7 +301,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         PlaybackManager.playSongList(shuffled, 0, true)
     }
 
-    fun togglePlayPause() = PlaybackManager.togglePlayPause()
+    private var lastTogglePlayPauseTime = 0L
+    fun togglePlayPause() {
+        val now = System.currentTimeMillis()
+        if (now - lastTogglePlayPauseTime < 350L) return
+        lastTogglePlayPauseTime = now
+        PlaybackManager.togglePlayPause()
+    }
     fun playNext() = PlaybackManager.playNext()
     fun playPrevious() = PlaybackManager.playPrevious()
     fun seekTo(ms: Long) = PlaybackManager.seekTo(ms)
@@ -491,7 +520,142 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // --- Excluded Folders Management ---
+    fun promptExcludeFolder(name: String, path: String) {
+        folderToExclude.value = Pair(name, path)
+    }
+
+    fun confirmExcludeFolder() {
+        val target = folderToExclude.value ?: return
+        folderToExclude.value = null
+        val folderName = target.first.trim()
+        val folderPath = if (target.second.isNotBlank()) target.second.trim() else folderName
+        if (activeFolderDetail.value?.name == folderName || activeFolderDetail.value?.path == folderPath) {
+            activeFolderDetail.value = null
+        }
+        viewModelScope.launch {
+            try {
+                repository.excludeFolder(path = folderPath, name = folderName)
+                PlaybackManager.removeSongsInExcludedFolder(folderPath, folderName)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun restoreExcludedFolder(path: String) {
+        viewModelScope.launch {
+            repository.restoreExcludedFolder(path)
+        }
+    }
+
+    fun clearAllExcludedFolders() {
+        viewModelScope.launch {
+            repository.clearAllExcludedFolders()
+        }
+    }
+
+    // --- Real Song Deletion from Device ---
+    fun promptDeleteSong(song: Song) {
+        songToDelete.value = song
+    }
+
+    fun confirmDeleteSong() {
+        val song = songToDelete.value ?: return
+        songToDelete.value = null
+        deleteSongFromDevice(song)
+    }
+
+    private fun deleteSongFromDevice(song: Song) {
+        val context = getApplication<Application>()
+        val file = File(song.dataPath)
+        val isInternalOrSample = !song.contentUri.startsWith("content://media/") ||
+                song.dataPath.contains("sample_") ||
+                song.dataPath.contains(context.packageName)
+
+        if (isInternalOrSample) {
+            try {
+                if (file.exists()) file.delete()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            onSongDeletedLocally(song)
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, song.id)
+                val pi = MediaStore.createDeleteRequest(context.contentResolver, listOf(uri))
+                pendingSongToDelete = song
+                viewModelScope.launch {
+                    _deleteIntentSenderRequest.emit(IntentSenderRequest.Builder(pi.intentSender).build())
+                }
+            } catch (e: Exception) {
+                try { file.delete() } catch (_: Exception) {}
+                onSongDeletedLocally(song)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, song.id)
+                context.contentResolver.delete(uri, null, null)
+                try { file.delete() } catch (_: Exception) {}
+                onSongDeletedLocally(song)
+            } catch (e: SecurityException) {
+                if (e is RecoverableSecurityException) {
+                    pendingSongToDelete = song
+                    viewModelScope.launch {
+                        _deleteIntentSenderRequest.emit(IntentSenderRequest.Builder(e.userAction.actionIntent.intentSender).build())
+                    }
+                } else {
+                    try { file.delete() } catch (_: Exception) {}
+                    onSongDeletedLocally(song)
+                }
+            } catch (e: Exception) {
+                try { file.delete() } catch (_: Exception) {}
+                onSongDeletedLocally(song)
+            }
+        } else {
+            // API <= 28
+            try {
+                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, song.id)
+                context.contentResolver.delete(uri, null, null)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            try { file.delete() } catch (_: Exception) {}
+            onSongDeletedLocally(song)
+        }
+    }
+
+    fun onSongDeleteResultReceived(isOk: Boolean) {
+        val song = pendingSongToDelete
+        pendingSongToDelete = null
+        if (isOk && song != null) {
+            onSongDeletedLocally(song)
+        }
+    }
+
+    private fun onSongDeletedLocally(song: Song) {
+        viewModelScope.launch {
+            PlaybackManager.removeSongEverywhere(song.id)
+            repository.deleteSongLocalReferences(song.id)
+        }
+    }
+
     fun closeDetailViews(): Boolean {
+        if (songToDelete.value != null) {
+            songToDelete.value = null
+            return true
+        }
+        if (folderToExclude.value != null) {
+            folderToExclude.value = null
+            return true
+        }
+        if (showManageExcludedFoldersDialog.value) {
+            showManageExcludedFoldersDialog.value = false
+            return true
+        }
         if (showStats.value) {
             showStats.value = false
             return true

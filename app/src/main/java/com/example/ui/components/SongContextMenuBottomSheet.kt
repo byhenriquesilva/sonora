@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -49,7 +51,9 @@ fun SongContextMenuBottomSheet(
     onToggleFavorite: () -> Unit,
     onGoToArtist: () -> Unit,
     onGoToAlbum: () -> Unit,
-    onShowDetails: () -> Unit
+    onShowDetails: () -> Unit,
+    onExcludeFolder: () -> Unit = {},
+    onDeleteSong: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState()
 
@@ -180,6 +184,32 @@ fun SongContextMenuBottomSheet(
                 tag = "ctx_details",
                 onClick = {
                     onShowDetails()
+                    onDismiss()
+                }
+            )
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                modifier = Modifier.padding(vertical = 6.dp)
+            )
+
+            ContextMenuItem(
+                icon = Icons.Default.FolderOff,
+                label = "Ocultar pasta (${song.folder})",
+                tag = "ctx_exclude_folder",
+                onClick = {
+                    onExcludeFolder()
+                    onDismiss()
+                }
+            )
+
+            ContextMenuItem(
+                icon = Icons.Default.Delete,
+                label = "Excluir do dispositivo",
+                tag = "ctx_delete_song",
+                tint = MaterialTheme.colorScheme.error,
+                onClick = {
+                    onDeleteSong()
                     onDismiss()
                 }
             )

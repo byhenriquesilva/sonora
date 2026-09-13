@@ -47,3 +47,12 @@ data class AppSettingEntity(
     val key: String,
     val value: String
 )
+
+@Entity(tableName = "excluded_folders")
+data class ExcludedFolderEntity(
+    @PrimaryKey
+    val path: String,
+    val name: String,
+    val excludedAt: Long = System.currentTimeMillis()
+)
+

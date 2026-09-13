@@ -76,6 +76,25 @@ interface MusicDao {
     @Query("DELETE FROM history")
     suspend fun clearHistory()
 
+    @Query("DELETE FROM history WHERE songId = :songId")
+    suspend fun deleteHistoryForSong(songId: Long)
+
+    @Query("DELETE FROM playlist_songs WHERE songId = :songId")
+    suspend fun deletePlaylistSongReferences(songId: Long)
+
+    // --- Excluded Folders ---
+    @Query("SELECT * FROM excluded_folders ORDER BY name ASC")
+    fun getAllExcludedFolders(): Flow<List<ExcludedFolderEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExcludedFolder(folder: ExcludedFolderEntity)
+
+    @Query("DELETE FROM excluded_folders WHERE path = :path")
+    suspend fun deleteExcludedFolder(path: String)
+
+    @Query("DELETE FROM excluded_folders")
+    suspend fun clearAllExcludedFolders()
+
     // --- Settings ---
     @Query("SELECT value FROM settings WHERE `key` = :key LIMIT 1")
     fun getSetting(key: String): Flow<String?>

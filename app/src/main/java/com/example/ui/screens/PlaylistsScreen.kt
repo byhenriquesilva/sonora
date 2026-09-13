@@ -31,7 +31,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.example.ui.components.LocalBottomContentPadding
@@ -81,27 +80,13 @@ fun PlaylistsScreen(
         )
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCreateDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .padding(bottom = 90.dp)
-                    .testTag("fab_create_playlist")
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Criar Playlist")
-            }
-        }
-    ) { innerPadding ->
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("playlists_screen")
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .testTag("playlists_screen")
+            modifier = Modifier.fillMaxSize()
         ) {
             // Header
             Row(
@@ -179,6 +164,18 @@ fun PlaylistsScreen(
                     }
                 }
             }
+        }
+
+        FloatingActionButton(
+            onClick = { showCreateDialog = true },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = LocalBottomContentPadding.current + 16.dp)
+                .testTag("fab_create_playlist")
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Criar Playlist")
         }
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
@@ -153,7 +154,8 @@ fun FolderDetailScreen(
     onPlayAll: () -> Unit,
     onShuffle: () -> Unit,
     onFavoriteClick: (Song) -> Unit,
-    onMoreClick: (Song) -> Unit
+    onMoreClick: (Song) -> Unit,
+    onExcludeFolder: () -> Unit = {}
 ) {
     val folderSongs = songs.filter { it.folder == folder.name }
 
@@ -171,7 +173,19 @@ fun FolderDetailScreen(
                 )
             },
             onPlayAll = onPlayAll,
-            onShuffle = onShuffle
+            onShuffle = onShuffle,
+            trailingAction = {
+                IconButton(
+                    onClick = onExcludeFolder,
+                    modifier = Modifier.testTag("btn_exclude_folder_detail")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FolderOff,
+                        contentDescription = "Ocultar pasta da biblioteca",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         )
 
         LazyColumn(
@@ -312,14 +326,24 @@ private fun DetailHeader(
     onBack: () -> Unit,
     artComposable: @Composable () -> Unit,
     onPlayAll: () -> Unit,
-    onShuffle: () -> Unit
+    onShuffle: () -> Unit,
+    trailingAction: @Composable (() -> Unit)? = null
 ) {
     Column {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.padding(top = 16.dp, start = 8.dp).testTag("btn_detail_back")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, start = 8.dp, end = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.testTag("btn_detail_back")
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+            }
+            trailingAction?.invoke()
         }
 
         Row(

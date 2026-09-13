@@ -11,9 +11,10 @@ import androidx.room.RoomDatabase
         PlaylistSongEntity::class,
         FavoriteEntity::class,
         HistoryEntity::class,
-        AppSettingEntity::class
+        AppSettingEntity::class,
+        ExcludedFolderEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

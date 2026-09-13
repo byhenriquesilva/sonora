@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -70,7 +69,7 @@ fun HomeScreen(
     onAlbumClick: (Album) -> Unit,
     onPlaylistClick: (PlaylistEntity) -> Unit,
     onSearchClick: () -> Unit,
-    onSettingsClick: () -> Unit,
+    onSettingsClick: () -> Unit = {},
     onScanClick: () -> Unit,
     onAddDemoClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -121,17 +120,6 @@ fun HomeScreen(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Pesquisar",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onSettingsClick,
-                        modifier = Modifier.testTag("btn_home_settings")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Configurações",
                             tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
